@@ -33,7 +33,7 @@ def login(session_file=SESSION_FILE,phone='',password=''):
         return logging.info('Serving as %s' % pyncm.GetCurrentSession().login_info['content']['profile']['nickname']) or True
     if not (phone and password):
         return logging.warning('Insufficient credentials, app will now run in guest mode') or True
-    pyncm.login.LoginViaCellphone(phone,password)
+    pyncm.apis.login.LoginViaCellphone(phone,password)
     logging.info('%s has logged in' % pyncm.GetCurrentSession().login_info['content']['profile']['nickname'])
     return save()
 
