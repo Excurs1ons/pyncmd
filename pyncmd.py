@@ -1,8 +1,8 @@
-import pyncm,os,argparse,logging
+import pyncm,pyncm.apis,pyncm.utils.lrcparser,pyncm.utils.helper,os,argparse,logging
 from collections import deque
 
 from pywebhost import PyWebHost,Request
-from pywebhost.modules import WriteContentToRequest,JSONMessageWrapper
+from pywebhost.modules import BinaryMessageWrapper, WriteContentToRequest,JSONMessageWrapper
 from pywebhost.modules.session import SessionWrapper
 from pywebhost.modules.session import Session
 
@@ -56,7 +56,36 @@ def route():
     @server.route('/')
     def IndexPage(server : PyWebHost,request : Request,content):
         WriteContentToRequest(request,'web/index.html',mime_type='text/html')
-
+    
+    @server.route('/static/printableLyrics.*')
+    @BinaryMessageWrapper(read=False)
+    def plrc(server : PyWebHost,request : Request,content):
+        id = request.query['id'][0]        
+        detail_dict = pyncm.apis.track.GetTrackDetail(id)['songs'][0]
+        track = pyncm.utils.helper.TrackHelper(detail_dict)
+        lyrics_dict = pyncm.apis.track.GetTrackLyrics(id)
+        lrc = {'romalrc':None,'lrc':None,'tlyric':None}
+        for index in lrc:
+            lrc[index] = pyncm.utils.lrcparser.LrcParser(lyrics_dict[index]['lyric'])
+        ticks = lrc['lrc'].lyrics_sorted.keys()
+        content = ''
+        content += (f'<head><link rel="stylesheet" href="../css/printableLyrics.css"><title>{track.Title}</title></head>')
+        content += (f'<h1>{track.TrackName}</h1>')
+        content += (f'<h2>{track.AlbumName} / {track.TrackPublishTime}</h2>')
+        content += (f'<h2>{" / ".join(track.Artists)}</h2>')
+        for tick in ticks:
+            content += ('<div class="block">')
+            for index in lrc:
+                if not lrc[index].lyrics:continue
+                ts,lines,lno = lrc[index].Find(lrc[index].lyrics_sorted,tick)
+                if tick >= ts:
+                    tss,line = lines[-1]
+                    content += (f'    <p class={index} ts="{tss}">{line.strip()}</p>')
+            content += ('</div>')
+        logging.info('static/printableLyrics : %s complete' % id)
+        request.send_response(200)
+        request.send_header('Content-Type','text/html;charset=UTF-8')
+        return content
     class NCMdAPISession(Session):                
         logger = logging.getLogger('NCMdAPI')   
         @property
@@ -70,12 +99,18 @@ def route():
             return self.request.server.requests_stack        
         @JSONMessageWrapper(read=False)        
         def _stats_requests(self,request: Request,content):      
-            '''accumulates total requests'''      
+            '''accumulates total requests'''   
+            self.setdefault('count',0)
+            if self['count'] < 2:
+                self['count'] = 2
             request.send_response(200)            
             return {'self':self.local_request_stack.to_list(),'global':self.global_request_stack.to_list()}
         @JSONMessageWrapper(read=False)
         def _stats_server(self,request: Request,content):      
-            '''server hoster nickname'''      
+            '''server hoster nickname'''
+            self.setdefault('count',0)
+            if self['count'] < 2:
+                self['count'] = 2      
             if GetCurrentSession().login_info['success']:
                 request.send_response(200)
                 return GetCurrentSession().login_info['content']['profile']
@@ -84,6 +119,10 @@ def route():
                 return {}                        
         @JSONMessageWrapper(read=False)
         def routeCloudmusicApis(self,request: Request, content):        
+            self.setdefault('count',0)
+            self['count'] = self['count'] + 1
+            if self['count'] < 2:
+                return request.send_response(503)
             path = list(filter(lambda x:x and x != 'pyncm',request.path.split('/')))
             base,target = path
             if not base in filter(lambda x:x.islower() and not '_' in x,dir(pyncm.apis)):
@@ -97,11 +136,12 @@ def route():
                 return request.send_error(403,'cannot perfrom "Set" calls')
             query = {k:v if not len(v) == 1 else v[0] for k,v in request.query.items()}
             response = getattr(base,target)(**query)
-            self.logger.info('[%s] %s - %s'%(request.address_string,target,query))                        
+            self.logger.info('[%s #%d] %s - %s'%(self.session_id,self['count'],target,query))                        
             if target in {'GetTrackAudio'} and response['code'] == 200:     
                 ids = [e['id'] for e in response['data']]
                 self.local_request_stack.extend(ids)
                 self.global_request_stack.extend(ids)
+            
             request.send_response(200)
             return response
         def onCreate(self, request: Request, content):            

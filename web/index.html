@@ -92,11 +92,7 @@
         }
 
         @keyframes shake {
-            50% { transform: translate(3px, 3px)  }
-            60% { transform: translate(-1px, 2px) }            
-            70% { transform: translate(3px, 1px) }
-            80% { transform: translate(-1px, 3px) }            
-            90% { transform: translate(1px, 1px) }            
+            50% { transform: translate(3px, 3px)  }         
             100% { transform: translate(3px, 0px) }
         }
 
@@ -258,7 +254,7 @@
                                         </template>
                                         <v-card>
                                             <v-card-title>
-                                                <a class="headline" v-on:click="openWindow('https://music.163.com/#/song?id=' + currentTrack.id)">{{ currentTrack.name }} - {{currentTrack.ar.map(function(f){return f.name}).join('/')}} - {{currentTrack.al.name}}</a>
+                                                <a class="headline" v-on:click="openWindow('static/printableLyrics?id=' + currentTrack.id)">{{ currentTrack.name }} - {{currentTrack.ar.map(function(f){return f.name}).join('/')}} - {{currentTrack.al.name}}</a>
                                             </v-card-title>
                                             <v-simple-table v-if="parsedLyrics">
                                                 <template v-slot:default>

@@ -1,4 +1,4 @@
-const id_regex = /\d{5,}/gm;
+const id_regex = /\d{4,}/gm;
 var vue = new Vue({
     el: '#app',
     vuetify: new Vuetify(
